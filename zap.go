@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -58,9 +59,12 @@ func GinzapWithConfig(logger *zap.Logger, conf *Config) gin.HandlerFunc {
 			if conf.UTC {
 				end = end.UTC()
 			}
-
+			user_id := c.GetString("user_id")
+			xRequestId := c.Request.Header.Get("X-Request-Id")
 			fields := []zapcore.Field{
 				zap.Int("status", c.Writer.Status()),
+				zap.String("user_id", user_id),
+				zap.String("x-request-id", xRequestId),
 				zap.String("method", c.Request.Method),
 				zap.String("path", path),
 				zap.String("query", query),
@@ -107,9 +111,32 @@ func RecoveryWithZap(logger *zap.Logger, stack bool) gin.HandlerFunc {
 // stack means whether output the stack info.
 // The stack info is easy to find where the error occurs but the stack info is too large.
 func CustomRecoveryWithZap(logger *zap.Logger, stack bool, recovery gin.RecoveryFunc) gin.HandlerFunc {
+	//Init Sentry
+	err := sentry.Init(sentry.ClientOptions{
+		// Either set your DSN here or set the SENTRY_DSN environment variable.
+		Dsn: "http://44917b48ca944a36a337cf0ab5860364@192.168.10.166:9000/16",
+		// Either set environment and release here or set the SENTRY_ENVIRONMENT
+		// and SENTRY_RELEASE environment variables.
+		// Environment: "Production",
+		// Release:     "my-project-name@1.0.0",
+		// Enable printing of SDK debug messages.
+		// Useful when getting started or trying to figure something out.
+		Debug: true,
+		// Set TracesSampleRate to 1.0 to capture 100%
+		// of transactions for performance monitoring.
+		// We recommend adjusting this value in production,
+		TracesSampleRate: 1.0,
+	})
+	if err != nil {
+		logger.Fatal("sentry.Init: %s", zap.Error(err))
+	}
+	defer sentry.Flush(2 * time.Second)
 	return func(c *gin.Context) {
 		defer func() {
 			if err := recover(); err != nil {
+				// Send error to Sentry
+				sentry.CurrentHub().Recover(err)
+				sentry.Flush(time.Second * 2)
 				// Check for a broken connection, as it is not really a
 				// condition that warrants a panic stack trace.
 				var brokenPipe bool
