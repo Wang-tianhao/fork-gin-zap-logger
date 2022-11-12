@@ -4,7 +4,7 @@ package ginzap
 
 import (
 	"bytes"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -63,7 +63,8 @@ func GinzapWithConfig(logger *zap.Logger, conf *Config) gin.HandlerFunc {
 			}
 			user_id := c.GetString("user_id")
 			xRequestId := c.Request.Header.Get("X-Request-Id")
-			body, _ := ioutil.ReadAll(c.Request.Body)
+			body, _ := io.ReadAll(c.Request.Body)
+
 			fields := []zapcore.Field{
 				zap.Int("status", c.Writer.Status()),
 				zap.String("user_id", user_id),
@@ -83,7 +84,7 @@ func GinzapWithConfig(logger *zap.Logger, conf *Config) gin.HandlerFunc {
 			if conf.Context != nil {
 				fields = append(fields, conf.Context(c)...)
 			}
-			c.Request.Body = ioutil.NopCloser(bytes.NewReader(body))
+			c.Request.Body = io.NopCloser(bytes.NewReader(body))
 			if len(c.Errors) > 0 {
 				// Append error field if this is an erroneous request.
 				for _, e := range c.Errors.Errors() {
