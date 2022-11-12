@@ -63,8 +63,10 @@ func GinzapWithConfig(logger *zap.Logger, conf *Config) gin.HandlerFunc {
 			}
 			user_id := c.GetString("user_id")
 			xRequestId := c.Request.Header.Get("X-Request-Id")
-			body, _ := io.ReadAll(c.Request.Body)
-
+			body, err := c.GetRawData()
+			if err != nil {
+				logger.Error(err.Error())
+			}
 			fields := []zapcore.Field{
 				zap.Int("status", c.Writer.Status()),
 				zap.String("user_id", user_id),
